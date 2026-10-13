@@ -156,6 +156,11 @@ export default function App() {
     window.addEventListener('favorites-updated', handleFavUpdated);
     window.addEventListener('auth-changed', handleAuthChanged);
 
+    const handleSupabaseConfigChanged = () => {
+      loadInitialData();
+    };
+    window.addEventListener('supabase-config-changed', handleSupabaseConfigChanged);
+
     // Browser navigation (back/forward button)
     const handlePopState = (e: PopStateEvent) => {
       if (e.state && e.state.tab) {
@@ -171,6 +176,7 @@ export default function App() {
     return () => {
       window.removeEventListener('favorites-updated', handleFavUpdated);
       window.removeEventListener('auth-changed', handleAuthChanged);
+      window.removeEventListener('supabase-config-changed', handleSupabaseConfigChanged);
       window.removeEventListener('popstate', handlePopState);
     };
   }, [loadInitialData]);
