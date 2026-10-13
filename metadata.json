@@ -1,0 +1,6 @@
+{
+  "name": "VIOOR PROMPTS — Catálogo de Edições com IA",
+  "description": "Catálogo digital público de prompts de edição de fotos para ChatGPT, Gemini e chats de IA com comparador antes/depois e cópia rápida.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
