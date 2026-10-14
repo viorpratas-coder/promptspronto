@@ -206,12 +206,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     }
   };
 
-  const handleDisconnectDb = () => {
-    clearSupabaseConfig();
+  const handleDisconnectDb = async () => {
+    await clearSupabaseConfig();
     setDbUrl('');
     setDbAnonKey('');
     setDbTestMessage(null);
-    checkSupabaseConnection().then(setDbStatus);
+    const s = await checkSupabaseConnection();
+    setDbStatus(s);
     onNotify('info', 'Supabase desconectado', 'Retornado ao modo catálogo local demonstrativo.');
     onRefreshData();
   };
@@ -947,6 +948,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               Copie as credenciais do seu projeto no painel do Supabase em{' '}
               <strong className="text-gray-200">Project Settings → API</strong> e salve abaixo.
             </p>
+
+            {/* Global sync notice for Incognito & Shared links */}
+            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-200 flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-[#d4af37] shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <strong className="text-white block font-semibold">Persistência Global Ativa (Aba Anônima & Novos Dispositivos):</strong>
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  Ao clicar em <strong>Salvar & Conectar Banco</strong>, as credenciais são gravadas de forma persistente. Qualquer pessoa acessando o link compartilhado ou em <strong>janela anônima</strong> conectará diretamente ao seu Supabase sem exibir dados mockados.
+                </p>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Field 1: Project URL */}

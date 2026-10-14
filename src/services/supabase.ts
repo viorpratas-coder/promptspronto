@@ -7,6 +7,7 @@ export interface StoredCredentials {
   url: string;
   anonKey: string;
   updatedAt?: string;
+  source?: 'stored' | 'server' | 'public' | 'env' | 'none';
 }
 
 export interface ConnectionStatus {
@@ -14,9 +15,13 @@ export interface ConnectionStatus {
   isConnected: boolean;
   hasSchema?: boolean;
   message: string;
-  source?: 'stored' | 'env' | 'none';
+  source?: 'stored' | 'server' | 'public' | 'env' | 'none';
   url?: string;
 }
+
+// In-memory cache for server-provided credentials (accessible to incognito and all browsers)
+let cachedServerCredentials: { url: string; anonKey: string; source: 'server' | 'public' } | null = null;
+let initPromise: Promise<boolean> | null = null;
 
 // Retrieve custom credentials saved in localStorage
 export function getStoredCredentials(): StoredCredentials | null {
@@ -37,8 +42,9 @@ export function getStoredCredentials(): StoredCredentials | null {
   }
 }
 
-// Retrieve active credentials (stored first, then env fallback)
-export function getActiveCredentials(): { url: string; anonKey: string; source: 'stored' | 'env' | 'none' } {
+// Retrieve active credentials (stored first, then server cached, then env fallback)
+export function getActiveCredentials(): { url: string; anonKey: string; source: 'stored' | 'server' | 'public' | 'env' | 'none' } {
+  // 1. Local browser storage
   const stored = getStoredCredentials();
   if (stored && stored.url && stored.anonKey) {
     return {
@@ -48,6 +54,16 @@ export function getActiveCredentials(): { url: string; anonKey: string; source: 
     };
   }
 
+  // 2. Server-side global shared config (works in incognito, other browsers & shared links)
+  if (cachedServerCredentials && cachedServerCredentials.url && cachedServerCredentials.anonKey) {
+    return {
+      url: cachedServerCredentials.url,
+      anonKey: cachedServerCredentials.anonKey,
+      source: cachedServerCredentials.source,
+    };
+  }
+
+  // 3. Environment variables (Vite build / .env)
   const envUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
   const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
@@ -100,6 +116,68 @@ export let supabase: SupabaseClient | null = createSupabaseInstance();
 
 export function getSupabase(): SupabaseClient | null {
   return supabase;
+}
+
+// Global initialization: fetches server-persisted credentials if none in localStorage
+// This ensures Incognito mode and other devices connect to Supabase automatically
+export async function initGlobalSupabaseConfig(): Promise<boolean> {
+  // If already configured in localStorage, verify and return
+  if (getStoredCredentials()) {
+    if (!supabase) supabase = createSupabaseInstance();
+    return true;
+  }
+
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    try {
+      // 1. Try server endpoint
+      const res = await fetch('/api/supabase-config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.url && data.anonKey && data.url.startsWith('http')) {
+          cachedServerCredentials = {
+            url: data.url.trim(),
+            anonKey: data.anonKey.trim(),
+            source: 'server',
+          };
+          supabase = createSupabaseInstance();
+          return true;
+        }
+      }
+    } catch {
+      // endpoint might be unavailable if static
+    }
+
+    try {
+      // 2. Try static public JSON fallback
+      const staticRes = await fetch('/supabase-config.json');
+      if (staticRes.ok) {
+        const staticData = await staticRes.json();
+        if (staticData && staticData.url && staticData.anonKey && staticData.url.startsWith('http')) {
+          cachedServerCredentials = {
+            url: staticData.url.trim(),
+            anonKey: staticData.anonKey.trim(),
+            source: 'public',
+          };
+          supabase = createSupabaseInstance();
+          return true;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 3. Fallback to env
+    if (isSupabaseConfigured()) {
+      supabase = createSupabaseInstance();
+      return true;
+    }
+
+    return false;
+  })();
+
+  return initPromise;
 }
 
 // Test credentials before saving
@@ -192,7 +270,7 @@ export async function testSupabaseCredentials(
   }
 }
 
-// Save credentials in localStorage and reload client
+// Save credentials in localStorage AND persist to server for Incognito & all users
 export async function saveSupabaseConfig(
   urlInput: string,
   keyInput: string
@@ -202,7 +280,7 @@ export async function saveSupabaseConfig(
 
   const testResult = await testSupabaseCredentials(url, anonKey);
 
-  // Store in localStorage
+  // Store in localStorage for instant current browser access
   const toStore: StoredCredentials = {
     url,
     anonKey,
@@ -210,6 +288,24 @@ export async function saveSupabaseConfig(
   };
 
   localStorage.setItem(SUPABASE_CREDENTIALS_STORAGE_KEY, JSON.stringify(toStore));
+
+  // Persist to backend server so Incognito windows and shared links also get connected!
+  try {
+    await fetch('/api/supabase-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, anonKey }),
+    });
+  } catch (e) {
+    console.warn('Could not persist to server /api/supabase-config:', e);
+  }
+
+  // Cache in memory
+  cachedServerCredentials = {
+    url,
+    anonKey,
+    source: 'server',
+  };
 
   // Re-create active client
   supabase = createSupabaseInstance();
@@ -221,9 +317,17 @@ export async function saveSupabaseConfig(
 }
 
 // Clear custom credentials and return to default
-export function clearSupabaseConfig(): void {
+export async function clearSupabaseConfig(): Promise<void> {
   try {
     localStorage.removeItem(SUPABASE_CREDENTIALS_STORAGE_KEY);
+    cachedServerCredentials = null;
+
+    try {
+      await fetch('/api/supabase-config', { method: 'DELETE' });
+    } catch {
+      // ignore
+    }
+
     supabase = createSupabaseInstance();
     window.dispatchEvent(new CustomEvent('supabase-config-changed'));
   } catch (err) {
@@ -233,6 +337,9 @@ export function clearSupabaseConfig(): void {
 
 // Check status of currently active connection
 export async function checkSupabaseConnection(): Promise<ConnectionStatus> {
+  // Ensure global config is loaded if not already done
+  await initGlobalSupabaseConfig();
+
   const active = getActiveCredentials();
 
   if (!isSupabaseConfigured() || !supabase) {

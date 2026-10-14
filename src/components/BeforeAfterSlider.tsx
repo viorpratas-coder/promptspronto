@@ -12,23 +12,22 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   beforeImage,
   afterImage,
   altText,
-  aspectRatio = '4:5',
 }) => {
   const [sliderPos, setSliderPos] = useState<number>(50); // percentage 0 - 100
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // If no original before image is provided, display high-end single view
+  // If no original before image is provided, display single high-end view
   if (!beforeImage) {
     return (
-      <div className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-[#0d0f17] group shadow-2xl">
+      <div className="relative w-full max-w-3xl mx-auto rounded-2xl overflow-hidden border border-white/10 bg-[#0d0f17] group shadow-2xl">
         <img
           src={afterImage}
           alt={altText}
-          className="w-full h-auto object-cover max-h-[75vh] mx-auto select-none"
+          className="w-full h-auto object-cover max-h-[70vh] mx-auto select-none block"
           loading="lazy"
         />
-        <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-xs font-medium text-amber-200 flex items-center gap-1.5">
+        <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/70 backdrop-blur-md border border-white/10 text-xs font-medium text-amber-200 flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-[#d4af37]" />
           Resultado IA
         </div>
@@ -39,19 +38,15 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   const handleMove = useCallback((clientX: number) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return;
     const x = clientX - rect.left;
     const percent = Math.max(0, Math.min(100, (x / rect.width) * 100));
     setSliderPos(percent);
   }, []);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
-    handleMove(e.touches[0].clientX);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    handleMove(e.clientX);
+  const handleStartDrag = (clientX: number) => {
+    setIsDragging(true);
+    handleMove(clientX);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -63,14 +58,34 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   };
 
   useEffect(() => {
-    const handleGlobalMouseUp = () => setIsDragging(false);
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    window.addEventListener('touchend', handleGlobalMouseUp);
-    return () => {
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('touchend', handleGlobalMouseUp);
+    if (!isDragging) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX);
     };
-  }, []);
+
+    const handleWindowTouchMove = (e: TouchEvent) => {
+      if (e.touches && e.touches[0]) {
+        handleMove(e.touches[0].clientX);
+      }
+    };
+
+    const handleWindowMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('touchend', handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('touchmove', handleWindowTouchMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+      window.removeEventListener('touchend', handleWindowMouseUp);
+    };
+  }, [isDragging, handleMove]);
 
   return (
     <div className="flex flex-col gap-3 w-full select-none">
@@ -84,41 +99,33 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onMouseDown={(e) => {
-          setIsDragging(true);
-          handleMove(e.clientX);
+          e.preventDefault();
+          handleStartDrag(e.clientX);
         }}
-        onMouseMove={handleMouseMove}
         onTouchStart={(e) => {
-          setIsDragging(true);
-          handleMove(e.touches[0].clientX);
+          handleStartDrag(e.touches[0].clientX);
         }}
-        onTouchMove={handleTouchMove}
-        className="relative w-full max-h-[75vh] overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f17] shadow-2xl cursor-ew-resize focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
+        className="relative w-full max-w-3xl mx-auto overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f17] shadow-2xl cursor-ew-resize focus:outline-none focus:ring-2 focus:ring-[#d4af37]"
       >
-        {/* After Image (Right/Full base) */}
+        {/* Base Image: After (Resultado com IA) */}
         <img
           src={afterImage}
           alt={`Resultado Editado: ${altText}`}
-          className="w-full h-auto object-cover max-h-[75vh] select-none block pointer-events-none"
+          className="w-full h-auto max-h-[70vh] object-cover block select-none pointer-events-none"
           draggable={false}
         />
 
-        {/* Before Image (Left clipped by sliderPos) */}
-        <div
-          className="absolute inset-0 overflow-hidden pointer-events-none"
-          style={{ width: `${sliderPos}%` }}
-        >
-          <img
-            src={beforeImage}
-            alt={`Foto Original: ${altText}`}
-            className="absolute top-0 left-0 h-full w-full object-cover max-w-none select-none pointer-events-none"
-            style={{
-              width: containerRef.current ? `${containerRef.current.offsetWidth}px` : '100%',
-              height: '100%',
-            }}
-            draggable={false}
-          />
-        </div>
+        {/* Overlay Image: Before (Foto Original) - perfectly aligned using CSS clip-path */}
+        <img
+          src={beforeImage}
+          alt={`Foto Original: ${altText}`}
+          className="absolute inset-0 w-full h-full object-cover block select-none pointer-events-none"
+          style={{
+            clipPath: `inset(0 ${100 - sliderPos}% 0 0)`,
+            WebkitClipPath: `inset(0 ${100 - sliderPos}% 0 0)`,
+          }}
+          draggable={false}
+        />
 
         {/* Divider Bar & Handle */}
         <div
@@ -127,31 +134,40 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
         >
           <div className="absolute top-0 bottom-0 -ml-[1px] w-[2px] bg-[#d4af37] shadow-[0_0_12px_rgba(212,175,55,0.8)]" />
           
-          <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-[#131622] border-2 border-[#d4af37] shadow-[0_4px_20px_rgba(0,0,0,0.8)] flex items-center justify-center text-[#d4af37] pointer-events-auto cursor-grab active:cursor-grabbing hover:scale-105 transition-transform">
-            <SlidersHorizontal className="w-4 h-4 rotate-90" />
+          <div
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#131622] border-2 border-[#d4af37] shadow-[0_4px_20px_rgba(0,0,0,0.8)] flex items-center justify-center text-[#d4af37] pointer-events-auto cursor-grab active:cursor-grabbing hover:scale-105 transition-transform ${
+              isDragging ? 'scale-110 shadow-[0_0_15px_rgba(212,175,55,0.6)]' : ''
+            }`}
+          >
+            <SlidersHorizontal className="w-4 h-4 rotate-90 text-[#d4af37]" />
           </div>
         </div>
 
         {/* Badges */}
-        <div className="absolute top-3 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[11px] font-semibold tracking-wider text-gray-300 uppercase flex items-center gap-1.5">
+        <div className="absolute top-3 left-3 z-10 pointer-events-none px-2.5 py-1 rounded-md bg-black/75 backdrop-blur-md border border-white/10 text-[11px] font-semibold tracking-wider text-gray-300 uppercase flex items-center gap-1.5">
           <ImageIcon className="w-3 h-3 text-gray-400" />
-          Original
+          Original (Antes)
         </div>
         <div className="absolute top-3 right-3 z-10 pointer-events-none px-2.5 py-1 rounded-md bg-[#131622]/85 backdrop-blur-md border border-[#d4af37]/30 text-[11px] font-semibold tracking-wider text-amber-200 uppercase flex items-center gap-1.5">
           <Sparkles className="w-3 h-3 text-[#d4af37]" />
-          Editado com IA
+          Resultado IA
         </div>
       </div>
 
       {/* Accessible Quick Controls & Help */}
-      <div className="flex items-center justify-between text-xs text-gray-400 px-1">
-        <span className="hidden sm:inline">Arraste a linha ou use as setas do teclado</span>
-        <div className="flex items-center gap-2 ml-auto">
+      <div className="flex flex-wrap items-center justify-between text-xs text-gray-400 px-1 gap-2 max-w-3xl mx-auto w-full">
+        <span className="text-gray-400 flex items-center gap-1.5 text-[11px] sm:text-xs">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-[#d4af37]" />
+          <span>Arraste a linha para comparar antes e depois</span>
+        </span>
+        <div className="flex items-center gap-1.5 ml-auto">
           <button
             type="button"
             onClick={() => setSliderPos(0)}
-            className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
-              sliderPos === 0 ? 'bg-[#d4af37]/20 border-[#d4af37] text-white' : 'border-white/10 hover:border-white/30 text-gray-400'
+            className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+              sliderPos === 0
+                ? 'bg-[#d4af37] text-slate-950 font-bold border-[#d4af37] shadow-sm'
+                : 'bg-white/5 border-white/10 hover:border-white/30 text-gray-300'
             }`}
           >
             Ver IA 100%
@@ -159,17 +175,21 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
           <button
             type="button"
             onClick={() => setSliderPos(50)}
-            className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
-              sliderPos === 50 ? 'bg-[#d4af37]/20 border-[#d4af37] text-white' : 'border-white/10 hover:border-white/30 text-gray-400'
+            className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+              sliderPos === 50
+                ? 'bg-[#d4af37] text-slate-950 font-bold border-[#d4af37] shadow-sm'
+                : 'bg-white/5 border-white/10 hover:border-white/30 text-gray-300'
             }`}
           >
-            50 / 50
+            50% / 50%
           </button>
           <button
             type="button"
             onClick={() => setSliderPos(100)}
-            className={`px-2.5 py-1 rounded-lg border text-xs transition-colors ${
-              sliderPos === 100 ? 'bg-[#d4af37]/20 border-[#d4af37] text-white' : 'border-white/10 hover:border-white/30 text-gray-400'
+            className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+              sliderPos === 100
+                ? 'bg-[#d4af37] text-slate-950 font-bold border-[#d4af37] shadow-sm'
+                : 'bg-white/5 border-white/10 hover:border-white/30 text-gray-300'
             }`}
           >
             Ver Original

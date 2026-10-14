@@ -15,7 +15,7 @@ import {
 import { promptService } from './services/promptService';
 import { storageService } from './services/storageService';
 import { authService, AuthState } from './services/authService';
-import { isSupabaseConfigured, checkSupabaseConnection } from './services/supabase';
+import { isSupabaseConfigured, checkSupabaseConnection, initGlobalSupabaseConfig } from './services/supabase';
 
 // Components
 import { Navbar } from './components/Navbar';
@@ -92,6 +92,7 @@ export default function App() {
   const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
+      await initGlobalSupabaseConfig();
       const [cats, cols, promptResult, currentAuth, connStatus] = await Promise.all([
         promptService.getCategories(),
         promptService.getCollections(),
