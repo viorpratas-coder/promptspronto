@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Category,
   Collection,
@@ -22,10 +22,10 @@ import { Navbar } from './components/Navbar';
 import { BottomNavigation } from './components/BottomNavigation';
 import { Toast } from './components/Toast';
 import { LoadingSkeletonGrid } from './components/LoadingSkeleton';
+import { PromptModalCard } from './components/PromptModalCard';
 
 // Pages
 import { HomePage } from './pages/HomePage';
-import { ExplorePage } from './pages/ExplorePage';
 import { PromptDetailPage } from './pages/PromptDetailPage';
 import { CollectionsPage } from './pages/CollectionsPage';
 import { CollectionDetailPage } from './pages/CollectionDetailPage';
@@ -47,6 +47,8 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<ViewMode>('home');
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
   const [selectedCollection, setSelectedCollection] = useState<Collection | null>(null);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState<boolean>(false);
+  const [modalPromptsList, setModalPromptsList] = useState<Prompt[]>([]);
 
   // Data states
   const [categories, setCategories] = useState<Category[]>([]);
@@ -88,9 +90,15 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Keep ref of allPrompts to prevent stale closures without causing infinite re-render loops
+  const allPromptsRef = useRef<Prompt[]>(allPrompts);
+  allPromptsRef.current = allPrompts;
+
   // Initial load
   const loadInitialData = useCallback(async () => {
-    setLoading(true);
+    if (allPromptsRef.current.length === 0) {
+      setLoading(true);
+    }
     try {
       await initGlobalSupabaseConfig();
       const [cats, cols, promptResult, currentAuth, connStatus] = await Promise.all([
@@ -122,10 +130,12 @@ export default function App() {
         const found = promptResult.prompts.find((p) => p.slug === slug || p.id === slug);
         if (found) {
           setSelectedPrompt(found);
-          setCurrentTab('prompt-detail');
+          setModalPromptsList(promptResult.prompts);
+          setIsPromptModalOpen(true);
+          setCurrentTab('home');
         }
       } else if (path === '/explorar') {
-        setCurrentTab('explore');
+        setCurrentTab('home');
       } else if (path === '/favoritos') {
         setCurrentTab('favorites');
       } else if (path === '/admin') {
@@ -164,6 +174,15 @@ export default function App() {
 
     // Browser navigation (back/forward button)
     const handlePopState = (e: PopStateEvent) => {
+      if (e.state && e.state.promptModalId) {
+        const found = allPromptsRef.current.find((p) => p.id === e.state.promptModalId);
+        if (found) {
+          setSelectedPrompt(found);
+          setIsPromptModalOpen(true);
+          return;
+        }
+      }
+      setIsPromptModalOpen(false);
       if (e.state && e.state.tab) {
         setCurrentTab(e.state.tab);
         if (e.state.prompt) setSelectedPrompt(e.state.prompt);
@@ -196,22 +215,21 @@ export default function App() {
   }, [filters]);
 
   // Navigation controller
-  const navigateTo = (tab: ViewMode, param?: any) => {
-    if (tab === 'explore') {
-      setFilters((prev) => ({
-        ...prev,
-        category: param?.category !== undefined ? param.category : (param?.sortBy ? 'all' : prev.category),
-        sortBy: param?.sortBy !== undefined ? param.sortBy : prev.sortBy,
-      }));
+  const navigateTo = (tab: ViewMode | string, param?: any) => {
+    setIsPromptModalOpen(false);
+    if (tab === 'explore' || tab === 'home') {
+      setCurrentTab('home');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.history.pushState({ tab: 'home' }, '', '/');
+      return;
     }
 
-    setCurrentTab(tab);
+    setCurrentTab(tab as ViewMode);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Push state to browser history
     let newPath = '/';
-    if (tab === 'explore') newPath = '/explorar';
-    else if (tab === 'collections') newPath = '/colecoes';
+    if (tab === 'collections') newPath = '/colecoes';
     else if (tab === 'favorites') newPath = '/favoritos';
     else if (tab === 'profile') newPath = '/perfil';
     else if (tab === 'admin') newPath = '/admin';
@@ -219,11 +237,26 @@ export default function App() {
     window.history.pushState({ tab }, '', newPath);
   };
 
-  const handleSelectPrompt = (prompt: Prompt) => {
+  const handleSelectPrompt = (prompt: Prompt, contextList?: Prompt[]) => {
     setSelectedPrompt(prompt);
-    setCurrentTab('prompt-detail');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    window.history.pushState({ tab: 'prompt-detail', prompt }, '', `/prompt/${prompt.slug}`);
+    setModalPromptsList(contextList && contextList.length > 0 ? contextList : allPrompts);
+    setIsPromptModalOpen(true);
+    window.history.pushState(
+      { tab: currentTab, promptModalId: prompt.id },
+      '',
+      `/prompt/${prompt.slug || prompt.id}`
+    );
+  };
+
+  const handleClosePromptModal = () => {
+    setIsPromptModalOpen(false);
+    let newPath = '/';
+    if (currentTab === 'collections') newPath = '/colecoes';
+    else if (currentTab === 'collection-detail' && selectedCollection) newPath = `/colecao/${selectedCollection.slug}`;
+    else if (currentTab === 'favorites') newPath = '/favoritos';
+    else if (currentTab === 'profile') newPath = '/perfil';
+    else if (currentTab === 'admin') newPath = '/admin';
+    window.history.pushState({ tab: currentTab }, '', newPath);
   };
 
   const handleSelectCollection = (collection: Collection) => {
@@ -241,6 +274,23 @@ export default function App() {
     <div className="min-h-screen bg-[#07080c] text-[#f3f4f6] flex flex-col selection:bg-[#d4af37]/30 selection:text-amber-200">
       {/* Toast feedback system */}
       <Toast toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Prompt Card Modal - Ao clicar, abre o card rápido sem navegar para outra tela */}
+      <PromptModalCard
+        prompt={selectedPrompt}
+        isOpen={isPromptModalOpen}
+        onClose={handleClosePromptModal}
+        promptsList={modalPromptsList.length > 0 ? modalPromptsList : allPrompts}
+        onSelectPrompt={(p) => {
+          setSelectedPrompt(p);
+          window.history.replaceState(
+            { tab: currentTab, promptModalId: p.id },
+            '',
+            `/prompt/${p.slug || p.id}`
+          );
+        }}
+        onCopiedToast={handlePromptCopiedToast}
+      />
 
       {/* Top Navigation */}
       {currentTab !== 'admin' && (
@@ -271,33 +321,14 @@ export default function App() {
                 <HomePage
                   popularPrompts={popularList}
                   recentPrompts={recentList}
+                  categories={categories}
                   favoriteIds={favoriteIds}
                   onNavigate={(t, p) => navigateTo(t as ViewMode, p)}
-                  onSelectPrompt={handleSelectPrompt}
+                  onSelectPrompt={(p) => handleSelectPrompt(p, allPrompts)}
                   onCopiedToast={handlePromptCopiedToast}
                 />
               );
             })()}
-
-            {currentTab === 'explore' && (
-              <ExplorePage
-                categories={categories}
-                prompts={filteredPrompts}
-                filters={filters}
-                onFilterChange={setFilters}
-                onResetFilters={() =>
-                  setFilters({
-                    search: '',
-                    category: 'all',
-                    tool: 'all',
-                    access: 'all',
-                    sortBy: 'recent',
-                  })
-                }
-                onSelectPrompt={handleSelectPrompt}
-                onCopiedToast={handlePromptCopiedToast}
-              />
-            )}
 
             {currentTab === 'prompt-detail' && selectedPrompt && (
               <PromptDetailPage
@@ -306,7 +337,7 @@ export default function App() {
                   (p) => p.id !== selectedPrompt.id && p.category_id === selectedPrompt.category_id
                 )}
                 onBack={() => navigateTo('home')}
-                onSelectPrompt={handleSelectPrompt}
+                onSelectPrompt={(p) => handleSelectPrompt(p, allPrompts)}
                 onCopiedToast={handlePromptCopiedToast}
               />
             )}
@@ -325,7 +356,12 @@ export default function App() {
                   (p) => p.collection_id === selectedCollection.id || p.category_id === selectedCollection.category_id
                 )}
                 onBack={() => navigateTo('collections')}
-                onSelectPrompt={handleSelectPrompt}
+                onSelectPrompt={(p) => {
+                  const collectionPrompts = allPrompts.filter(
+                    (item) => item.collection_id === selectedCollection.id || item.category_id === selectedCollection.category_id
+                  );
+                  handleSelectPrompt(p, collectionPrompts);
+                }}
                 onCopiedToast={handlePromptCopiedToast}
               />
             )}
@@ -333,7 +369,7 @@ export default function App() {
             {currentTab === 'favorites' && (
               <FavoritesPage
                 favoritePrompts={favoritePrompts}
-                onSelectPrompt={handleSelectPrompt}
+                onSelectPrompt={(p) => handleSelectPrompt(p, favoritePrompts)}
                 onNavigate={(t) => navigateTo(t as ViewMode)}
                 onRefreshFavorites={() => {
                   const ids = storageService.getLocalFavoriteIds();

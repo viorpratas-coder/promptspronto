@@ -101,8 +101,8 @@ export const FavoritesPage: React.FC<FavoritesPageProps> = ({
             icon={<Heart className="w-7 h-7 text-rose-400" />}
             title="Nenhum prompt salvo ainda"
             description="Toque no ícone de coração em qualquer card ou página de detalhe para guardar suas referências favoritas."
-            actionLabel="Explorar o Catálogo"
-            onAction={() => onNavigate('explore')}
+            actionLabel="Ver Galeria de Prompts"
+            onAction={() => onNavigate('home')}
           />
 
           {/* Quick guide on how to favorite */}

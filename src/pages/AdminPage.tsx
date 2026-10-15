@@ -307,17 +307,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     setIsPromptModalOpen(true);
   };
 
-  const handlePromptUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'cover' | 'original') => {
+  const handlePromptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setPUploading(true);
-    const res = await promptService.uploadImage(file, target === 'cover' ? 'covers' : 'originals');
+    const res = await promptService.uploadImage(file, 'covers');
     setPUploading(false);
 
     if (res.success && res.url) {
-      if (target === 'cover') setPCoverImage(res.url);
-      else setPOriginalImage(res.url);
+      setPCoverImage(res.url);
       onNotify('success', 'Imagem carregada com sucesso!');
     } else {
       onNotify('error', 'Falha no upload', res.error);
@@ -327,7 +326,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   const handleSavePrompt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pTitle.trim() || !pCoverImage.trim() || !pPromptText.trim()) {
-      onNotify('error', 'Campos obrigatórios', 'Preencha o título, a imagem e o texto do prompt.');
+      onNotify('error', 'Campos obrigatórios', 'Preencha o título, a imagem editada e o texto do prompt.');
       return;
     }
 
@@ -353,14 +352,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       description: `Edição em estilo ${selectedCat?.name || 'IA'} para ChatGPT e Gemini.`,
       prompt_text: pPromptText.trim(),
       cover_image: pCoverImage.trim(),
-      original_image: pOriginalImage.trim() || undefined,
       category_id: pCategoryId,
       category_name: selectedCat?.name || 'Geral',
       tags: tagsArray.length > 0 ? tagsArray : ['ChatGPT', 'Gemini'],
       tool_name: pToolName,
       instructions:
         pInstructions.trim() ||
-        '1. Abra o ChatGPT ou Gemini.\n2. Anexe sua foto.\n3. Cole o prompt copiado e envie.',
+        '1. Abra o ChatGPT ou Gemini.\n2. Cole o prompt copiado e envie.',
       is_published: true,
       is_premium: false,
       aspect_ratio: '4:5',
@@ -694,11 +692,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             <table className="w-full text-left text-xs text-gray-300">
               <thead className="bg-[#171a27] text-gray-400 text-[11px] uppercase tracking-wider border-b border-white/8">
                 <tr>
-                  <th className="py-3 px-4">Referência</th>
+                  <th className="py-3 px-4">Foto Editada</th>
                   <th className="py-3 px-4">Título do Prompt</th>
                   <th className="py-3 px-4">Categoria</th>
                   <th className="py-3 px-4">Compatibilidade</th>
-                  <th className="py-3 px-4">Antes / Depois</th>
                   <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
               </thead>
@@ -730,17 +727,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                         <span className="text-gray-300 font-mono text-[11px]">
                           {p.tool_name || 'ChatGPT & Gemini'}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        {p.original_image ? (
-                          <span className="text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                            ✓ Comparador Ativo
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-gray-500">
-                            Apenas resultado
-                          </span>
-                        )}
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
@@ -786,7 +772,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-400">
+                    <td colSpan={5} className="py-8 text-center text-gray-400">
                       Nenhum prompt encontrado.
                     </td>
                   </tr>
@@ -1326,62 +1312,36 @@ CREATE POLICY "Atualização e Exclusão de Imagens" ON storage.objects FOR ALL 
                 </div>
               </div>
 
-              {/* Imagem de Referência (Capa) */}
+              {/* Foto Editada */}
               <div>
                 <label className="block text-xs font-semibold text-gray-200 mb-1">
-                  Foto de Referência (Resultado da Edição) *
+                  Foto Editada (Resultado do Prompt) *
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="url"
                     value={pCoverImage}
                     onChange={(e) => setPCoverImage(e.target.value)}
-                    placeholder="https://... URL da foto de resultado"
+                    placeholder="https://... URL da foto editada"
                     required
                     className="flex-1 px-3.5 py-2 rounded-xl bg-[#151825] border border-white/10 text-white text-xs focus:outline-none focus:border-[#d4af37]"
                   />
                   <label className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-medium cursor-pointer flex items-center gap-1.5 shrink-0">
                     <Upload className="w-3.5 h-3.5 text-[#d4af37]" />
-                    <span>Upload</span>
+                    <span>Upload Foto</span>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      onChange={(e) => handlePromptUpload(e, 'cover')}
+                      onChange={handlePromptUpload}
                       className="hidden"
                     />
                   </label>
                 </div>
                 {pCoverImage && (
-                  <div className="mt-2 w-16 h-20 rounded-lg overflow-hidden border border-white/10 bg-black">
-                    <img src={pCoverImage} alt="Preview" className="w-full h-full object-cover" />
+                  <div className="mt-2 w-20 h-24 rounded-lg overflow-hidden border border-white/10 bg-black">
+                    <img src={pCoverImage} alt="Preview Foto Editada" className="w-full h-full object-cover" />
                   </div>
                 )}
-              </div>
-
-              {/* Imagem Original (Antes/Depois) */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1">
-                  Foto Original (Opcional — habilita comparador Antes/Depois)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={pOriginalImage}
-                    onChange={(e) => setPOriginalImage(e.target.value)}
-                    placeholder="https://... URL da foto original antes da edição"
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-[#151825] border border-white/10 text-white text-xs focus:outline-none focus:border-[#d4af37]"
-                  />
-                  <label className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-medium cursor-pointer flex items-center gap-1.5 shrink-0">
-                    <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Upload</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={(e) => handlePromptUpload(e, 'original')}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
               </div>
 
               {/* Prompt Text */}

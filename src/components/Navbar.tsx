@@ -39,7 +39,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="hidden md:flex items-center gap-1.5 lg:gap-3">
           {[
             { id: 'home', label: 'Início' },
-            { id: 'explore', label: 'Explorar Catálogo' },
             { id: 'favorites', label: 'Favoritos', count: favoritesCount },
           ].map((item) => {
             const isActive = currentTab === item.id;

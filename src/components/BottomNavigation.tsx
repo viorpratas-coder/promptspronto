@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, Heart } from 'lucide-react';
+import { Home, Heart } from 'lucide-react';
 
 interface BottomNavigationProps {
   currentTab: string;
@@ -14,13 +14,12 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 }) => {
   const tabs = [
     { id: 'home', label: 'Início', icon: Home },
-    { id: 'explore', label: 'Explorar', icon: Compass },
     { id: 'favorites', label: 'Salvos', icon: Heart, count: favoritesCount },
   ];
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#08090e]/95 backdrop-blur-xl border-t border-white/8 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
-      <div className="grid grid-cols-3 h-16 items-center">
+      <div className="grid grid-cols-2 h-16 items-center">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = currentTab === tab.id;

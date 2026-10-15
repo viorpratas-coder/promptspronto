@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Sparkles, SlidersHorizontal, Layers } from 'lucide-react';
+import { Heart, Sparkles } from 'lucide-react';
 import { Prompt } from '../types';
 import { CopyPromptButton } from './CopyPromptButton';
 import { storageService } from '../services/storageService';
@@ -63,8 +63,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     });
   };
 
-  const hasBeforeAfter = Boolean(prompt.original_image);
-
   return (
     <div
       onClick={() => onSelect(prompt)}
@@ -82,7 +80,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
         />
 
         {/* Top Badges */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 pointer-events-none">
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1 pointer-events-none">
           {/* Access status badge */}
           {prompt.is_premium ? (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-500/90 text-slate-950 backdrop-blur-md shadow-md flex items-center gap-1">
@@ -94,14 +92,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
               Grátis
             </span>
           )}
-
-          {/* Before/After Indicator */}
-          {hasBeforeAfter && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 backdrop-blur-md flex items-center gap-1">
-              <SlidersHorizontal className="w-2.5 h-2.5" />
-              Antes/Depois
-            </span>
-          )}
         </div>
 
         {/* Favorite button (always clickable) */}
@@ -110,8 +100,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
           onClick={toggleFavorite}
           aria-label={isFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
           className={`absolute top-2.5 right-2.5 p-2 rounded-full backdrop-blur-md transition-all active:scale-90 ${
-            hasBeforeAfter ? 'top-8' : 'top-2.5'
-          } ${
             isFav
               ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50 shadow-lg'
               : 'bg-black/50 text-white/80 hover:text-white border border-white/10 hover:bg-black/70'
